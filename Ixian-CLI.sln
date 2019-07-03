@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 15
+VisualStudioVersion = 15.0.28307.705
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ixian-CLI", "Ixian-CLI\Ixian-CLI.csproj", "{59A34BD9-88F2-433D-81B3-84243A432D8D}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{59A34BD9-88F2-433D-81B3-84243A432D8D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{59A34BD9-88F2-433D-81B3-84243A432D8D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{59A34BD9-88F2-433D-81B3-84243A432D8D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{59A34BD9-88F2-433D-81B3-84243A432D8D}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {C31EB26B-1E0D-4221-A6EA-F9145B279C58}
+	EndGlobalSection
+EndGlobal
