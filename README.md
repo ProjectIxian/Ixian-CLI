@@ -6,6 +6,7 @@ ixicli [-h] [-v] [-i ADDRESS] [-p PORT] [-u USERNAME] [-w PASSWORD] command [arg
 
 ## Parameters
 | Short | Long version | Description |
+| --- | --- | --- |
 | -h | n/a | Display short help information |
 | -v | n/a | Verbose mode. Displays more information about what the client is doing. |
 | -i | --ip | Set DLTNode IP or hostname. If omitted, `localhost` is assumed. |
@@ -29,6 +30,7 @@ Some API methods require additional parameters. Any such values may be supplied 
 In addition, longer arguments may also be supplied via the standard input, if the option `--stdin` is specified. In this case,
 arguments are parsed in the same way as on the program command line (multiple arguments per line are allowed). Parsing is finished
 when an empty line is encountered.
+Complex values may be enclosed in double quotes `"` and may therefore contain all valid unicode characters, including space, equal sign and punctuation.
 
 ixicli does not perform any kind of validation on these parameters and passes them on to the Node's API server for processing.
 

@@ -17,6 +17,19 @@ namespace Ixian_CLI
         public Dictionary<string, object> @params = null;
     }
 
+    class JsonError
+    {
+        public int code = 0;
+        public string message = null;
+    }
+
+    class JsonResponse
+    {
+        public object result = null;
+        public JsonError error = null;
+        public string id = null;
+    }
+
     class Program
     {
         // default settings
@@ -30,9 +43,6 @@ namespace Ixian_CLI
 
         // status flags
         private static bool display_help = false;
-
-        // internals
-        private static StreamWriter StdErr = new StreamWriter(Console.OpenStandardError());
 
         private static string readNextString(string[] args, int current)
         {
@@ -63,6 +73,24 @@ namespace Ixian_CLI
                 display_help = true;
                 throw new Exception(String.Format("Missing a numeric argument for {0}.", args[current]));
             }
+        }
+
+        private static void fatalError(String message, int error_code = 0)
+        {
+            var response = new JsonResponse();
+            response.error = new JsonError();
+            response.error.code = error_code;
+            response.error.message = message;
+            string response_text = "";
+            if(prettyPrint)
+            {
+                response_text = JsonConvert.SerializeObject(response, Formatting.Indented);
+            } else
+            {
+                response_text = JsonConvert.SerializeObject(response);
+            }
+            Console.Error.WriteLine("ERROR: {0}", message);
+            Console.WriteLine(response_text);
         }
 
         private static string[] processApplicableArgs(string[] args)
@@ -100,7 +128,8 @@ namespace Ixian_CLI
                 }
                 catch(Exception e)
                 {
-                    Console.WriteLine("ERROR: Error while parsing commandline arguments: {0}", e.Message);
+                    fatalError(String.Format("Error while parsing commandline arguments: {0}", e.Message), -32602);
+                    display_help = true;
                 }
             }
             return leftoverArgs.ToArray();
@@ -120,7 +149,7 @@ namespace Ixian_CLI
             Console.WriteLine("    --stdin\t\t Read parameter values from stdin in addition to program arguments.");
         }
 
-        private static bool isValidMethod(string method)
+        private static bool isValidName(string method)
         {
             Regex validMethod = new Regex("[a-zA-Z0-9_]+");
             var m = validMethod.Match(method);
@@ -187,6 +216,12 @@ namespace Ixian_CLI
                             {
                                 // form 3
                                 val = possible_arg.Substring(1);
+                                i += 1;
+                            } else if(arguments[i].EndsWith("="))
+                            {
+                                // form 2
+                                val = possible_arg;
+                                i += 1;
                             }
                         }
                     }
@@ -196,21 +231,88 @@ namespace Ixian_CLI
                 {
                     throw new Exception(String.Format("Missing value for key {0}", key));
                 }
-                parsed_arguments.Add(key, val);
+                // remove double quotes from actual arguments
+                if(val.StartsWith("\"") && val.EndsWith("\""))
+                {
+                    val = val.Substring(1, val.Length - 2);
+                }
+                if (key.StartsWith("\"") && key.EndsWith("\""))
+                {
+                    key = key.Substring(1, key.Length - 2);
+                }
+                if (parsed_arguments.ContainsKey(key))
+                {
+                    Console.Error.WriteLine("WARN: Duplicate argument {0}", key);
+                    parsed_arguments[key] = val;
+                }
+                else
+                {
+                    parsed_arguments.Add(key, val);
+                }
+                Console.Error.WriteLine("Parsed into: {0} -> {1}", key, val);
             }
         }
 
         private static void addStdinArgument(string line, ref Dictionary<string, object> args)
         {
-            var keywords = line.Split(' ');
-            readAPIArguments(keywords, ref args);
+            // simplistic parser - splits string into word-tokens on spaces, but allows double-quoted strings
+            List<string> parsed_arguments = new List<string>();
+            int pos = 0;
+            while (pos < line.Length)
+            {
+                if (line[pos] == ' ' || line[pos] == '\t')
+                {
+                    pos += 1;
+                    continue;
+                }
+                if (line[pos] == '=')
+                {
+                    parsed_arguments.Add("=");
+                    pos += 1;
+                    continue;
+                }
+                if(char.IsLetterOrDigit(line[pos]))
+                {
+                    int word_start = pos;
+                    while(pos < line.Length && char.IsLetterOrDigit(line[pos]))
+                    {
+                        pos += 1;
+                    }
+                    parsed_arguments.Add(line.Substring(word_start, pos - word_start));
+                    continue;
+                }
+                if(line[pos] == '"')
+                {
+                    int word_start = pos;
+                    pos += 1;
+                    while(pos < line.Length && line[pos] != '"')
+                    {
+                        pos += 1;
+                    }
+                    if(pos < line.Length && line[pos] == '"')
+                    {
+                        parsed_arguments.Add(line.Substring(word_start + 1, pos - word_start - 1));
+                        pos += 1;
+                        continue;
+                    } else
+                    {
+                        throw new Exception("Unterminated quoted string!");
+                    }
+                }
+            }
+            readAPIArguments(parsed_arguments.ToArray(), ref args);
         }
 
         private async static Task executeDLTAPIRequest(JsonRpcRequest request)
         {
             // TODO: how to send user+pass
             HttpClient client = new HttpClient();
-            string request_uri = String.Format("http://{0}:{1}/", hostname, port);
+            string auth = "";
+            if(username != "" && password != "")
+            {
+                auth = String.Format("{0}:{1}@", username, password);
+            }
+            string request_uri = String.Format("http://{0}{1}:{2}/", auth, hostname, port);
             try
             {
                 var content = new PushStreamContent((stream, httpContent, transportContext) =>
@@ -249,12 +351,12 @@ namespace Ixian_CLI
                 {
                     string reason = reply.ReasonPhrase;
                     string body = await reply.Content.ReadAsStringAsync();
-                    Console.WriteLine("API ERROR: {0}: {1}", reason, body);
+                    fatalError(String.Format("API ERROR: {0}: {1}", reason, body), -32603);
                 }
             }
             catch (Exception e)
             {
-                Console.WriteLine("ERROR: {0}", e.Message);
+                fatalError(e.Message, -32603);
             }
         }
 
@@ -268,9 +370,9 @@ namespace Ixian_CLI
             }
 
             string method = commands[0];
-            if(!isValidMethod(method))
+            if(!isValidName(method))
             {
-                Console.WriteLine("ERROR: '{0}' is not a valid metod name.", method);
+                fatalError(String.Format("'{0}' is not a valid metod name.", method), -32601);
                 return;
             }
             commands = commands.Skip(1).ToArray();
@@ -279,14 +381,20 @@ namespace Ixian_CLI
             // Read STDIN arguments, if needed
             if(stdin)
             {
-                Console.WriteLine("Enter arguments, one on each line. End with an empty line");
+                //Console.WriteLine("Enter arguments, one on each line. End with an empty line");
                 using(var sr = new StreamReader(Console.OpenStandardInput()))
                 {
                     string line = "";
                     while((line = sr.ReadLine()) != null)
                     {
                         if (line == "") break;
-                        addStdinArgument(line, ref arguments);
+                        try
+                        {
+                            addStdinArgument(line, ref arguments);
+                        } catch (Exception e)
+                        {
+                            Console.Error.WriteLine("ERROR: Error while parsing argument from stdin: {0}", e.Message);
+                        }
                     }
                 }
             }
@@ -302,7 +410,7 @@ namespace Ixian_CLI
                 executeDLTAPIRequest(request).Wait();
             } catch (Exception e)
             {
-                Console.WriteLine("ERROR: Error while executing API request: {0}", e.Message);
+                fatalError(String.Format("Error while executing API request: {0}", e.Message), -32603);
             }
         }
     }
